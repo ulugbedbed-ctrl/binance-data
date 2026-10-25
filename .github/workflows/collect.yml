@@ -1,0 +1,43 @@
+name: Binance ma'lumot yig'ish
+
+on:
+  schedule:
+    - cron: "7 * * * *"   # har soatning 7-daqiqasida (UTC)
+  workflow_dispatch:
+    inputs:
+      backfill_days:
+        description: "Oldingi necha kunni to'ldirish (0 = faqat oxirgi soat)"
+        required: false
+        default: "0"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests==2.32.3
+      - name: Ma'lumot yig'ish
+        run: python collector.py --backfill "${{ github.event.inputs.backfill_days || '0' }}"
+      - name: Commit va push
+        run: |
+          git config user.name "data-bot"
+          git config user.email "data-bot@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then
+            echo "Yangi ma'lumot yo'q"
+          else
+            git commit -m "Ma'lumot: $(date -u +'%Y-%m-%d %H:%M') UTC"
+            git pull --rebase
+            git push
+          fi
